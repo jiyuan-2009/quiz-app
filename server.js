@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '.')));
 
 // ========== 飞书 API 封装 ==========
 const FEISHU_BASE = 'https://open.feishu.cn/open-apis';
