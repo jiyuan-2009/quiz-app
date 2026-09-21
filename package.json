@@ -1,0 +1,19 @@
+{
+  "name": "quiz-app",
+  "version": "2.0.0",
+  "description": "二维码答题小程序（飞书多维表格后端版）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
