@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: quiz-app
+    runtime: node
+    repo: https://github.com/your-github-username/quiz-app
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    region: singapore
+    envVars:
+      - key: FEISHU_APP_ID
+        value: cli_xxxxxxxxxxxx
+      - key: FEISHU_APP_SECRET
+        value: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      - key: FEISHU_BASE_TOKEN
+        value: W20CbpxemaMpuesZTSwcwE7enCf
+      - key: QUIZ_TABLE_ID
+        value: tblQF6QmmICc4mEp
+      - key: RECORD_TABLE_ID
+        value: tblhvkWe0fmSVEz2
+      - key: ADMIN_PASSWORD
+        value: admin123
+      - key: PORT
+        value: "10000"
