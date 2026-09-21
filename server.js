@@ -163,7 +163,7 @@ app.post('/api/questions', async (req, res) => {
     const answerLetters = (answer || []).map(i => String.fromCharCode(65 + i)).join(',');
 
     const fields = {
-      '题目类型': [typeText],
+      '题目类型': typeText,
       '题目内容': question,
       '选项A': options[0] || '',
       '选项B': options[1] || '',
@@ -171,7 +171,7 @@ app.post('/api/questions', async (req, res) => {
       '选项D': options[3] || '',
       '正确答案': answerLetters,
       '分值': score || (type === 'multi' ? 20 : 10),
-      '状态': ['启用']
+      '状态': '启用'
     };
 
     const baseToken = process.env.FEISHU_BASE_TOKEN;
@@ -199,7 +199,7 @@ app.put('/api/questions/:id', async (req, res) => {
     const typeMap = { single: '单选', multi: '多选', judge: '判断' };
     const fields = {};
 
-    if (type) fields['题目类型'] = [typeMap[type] || '单选'];
+    if (type) fields['题目类型'] = typeMap[type] || '单选';
     if (question !== undefined) fields['题目内容'] = question;
     if (options) {
       fields['选项A'] = options[0] || '';
@@ -211,7 +211,7 @@ app.put('/api/questions/:id', async (req, res) => {
       fields['正确答案'] = answer.map(i => String.fromCharCode(65 + i)).join(',');
     }
     if (score !== undefined) fields['分值'] = score;
-    if (status !== undefined) fields['状态'] = [status ? '启用' : '禁用'];
+    if (status !== undefined) fields['状态'] = status ? '启用' : '禁用';
 
     const baseToken = process.env.FEISHU_BASE_TOKEN;
     const tableId = process.env.QUIZ_TABLE_ID;
@@ -272,7 +272,7 @@ app.post('/api/records', async (req, res) => {
       '电话号码': phone,
       '得分': score || 0,
       '答对题数': correctCount || 0,
-      '获奖等级': [prizeMap[prize] || '未获奖'],
+      '获奖等级': prizeMap[prize] || '未获奖',
       '答题用时': timeUsed || ''
     };
 
