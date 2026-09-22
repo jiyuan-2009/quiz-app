@@ -249,7 +249,38 @@ app.delete('/api/questions/:id', async (req, res) => {
 });
 
 // ========== 答题记录接口 ==========
+// 检查手机号是否已答过题
+app.get('/api/records/check/:phone', async (req, res) => {
+  try {
+    const { phone } = req.params;
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.RECORD_TABLE_ID;
 
+    const result = await feishuRequest(
+      'POST',
+      `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
+      {
+        filter: {
+          conjunction: 'and',
+          conditions: [
+            {
+              field_name: '电话号码',
+              operator: 'is',
+              value: [phone]
+            }
+          ]
+        },
+        page_size: 1
+      }
+    );
+
+    const exists = result.data && result.data.items && result.data.items.length > 0;
+    res.json({ success: true, exists });
+  } catch (err) {
+    console.error('检查手机号失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 // 提交答题结果
 app.post('/api/records', async (req, res) => {
   try {
@@ -258,7 +289,31 @@ app.post('/api/records', async (req, res) => {
     if (!name || !team || !phone) {
       return res.status(400).json({ success: false, error: '请填写完整信息' });
     }
+    // 检查是否已答过题（每人只能答一次）
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.RECORD_TABLE_ID;
 
+    const checkResult = await feishuRequest(
+      'POST',
+      `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
+      {
+        filter: {
+          conjunction: 'and',
+          conditions: [
+            {
+              field_name: '电话号码',
+              operator: 'is',
+              value: [phone]
+            }
+          ]
+        },
+        page_size: 1
+      }
+    );
+
+    if (checkResult.data && checkResult.data.items && checkResult.data.items.length > 0) {
+      return res.status(400).json({ success: false, error: '您已经参与过答题，每人仅限一次' });
+    }
     const prizeMap = {
       'first': '一等奖',
       'second': '二等奖',
