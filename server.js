@@ -130,13 +130,18 @@ app.get('/api/questions', async (req, res) => {
           }
         });
 
+        // 难度字段
+        const difficultyText = Array.isArray(f['难度']) ? f['难度'][0] : f['难度'];
+        const difficultyMap = { '简单': 'easy', '中等': 'medium', '困难': 'hard' };
+
         return {
           id: item.record_id,
           type: typeMap[typeText] || 'single',
           question: f['题目内容'] || '',
           options,
           answer,
-          score: f['分值'] || (typeMap[typeText] === 'multi' ? 20 : 10)
+          score: f['分值'] || (typeMap[typeText] === 'multi' ? 20 : 10),
+          difficulty: difficultyMap[difficultyText] || 'medium'
         };
       });
 
