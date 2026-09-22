@@ -1034,14 +1034,14 @@ async function startQuiz() {
     const questions = data.data;
 
     // 按题型+难度分层抽题，保证每套试卷难度均衡
-    // 配比：单选4(简单1+中等2+困难1) + 多选2(中等1+困难1) + 判断2(简单1+中等1) = 8道
+    // 配比：单选4(简单1+中等2+困难1) + 多选2(中等1+困难1) + 判断4(简单2+中等2) = 10道
     const singleEasy = pickRandom(questions.filter(q => q.type === 'single' && q.difficulty === 'easy'), 1);
     const singleMedium = pickRandom(questions.filter(q => q.type === 'single' && q.difficulty === 'medium'), 2);
     const singleHard = pickRandom(questions.filter(q => q.type === 'single' && q.difficulty === 'hard'), 1);
     const multiMedium = pickRandom(questions.filter(q => q.type === 'multi' && q.difficulty === 'medium'), 1);
     const multiHard = pickRandom(questions.filter(q => q.type === 'multi' && q.difficulty === 'hard'), 1);
-    const judgeEasy = pickRandom(questions.filter(q => q.type === 'judge' && q.difficulty === 'easy'), 1);
-    const judgeMedium = pickRandom(questions.filter(q => q.type === 'judge' && q.difficulty === 'medium'), 1);
+    const judgeEasy = pickRandom(questions.filter(q => q.type === 'judge' && q.difficulty === 'easy'), 2);
+    const judgeMedium = pickRandom(questions.filter(q => q.type === 'judge' && q.difficulty === 'medium'), 2);
 
     // 某难度题量不足时，用同题型其他难度兜底
     const singleQs = [...singleEasy, ...singleMedium, ...singleHard];
@@ -1057,8 +1057,8 @@ async function startQuiz() {
     }
 
     const judgeQs = [...judgeEasy, ...judgeMedium];
-    if (judgeQs.length < 2) {
-      const backup = pickRandom(questions.filter(q => q.type === 'judge' && !judgeQs.find(j => j.id === q.id)), 2 - judgeQs.length);
+    if (judgeQs.length < 4) {
+      const backup = pickRandom(questions.filter(q => q.type === 'judge' && !judgeQs.find(j => j.id === q.id)), 4 - judgeQs.length);
       judgeQs.push(...backup);
     }
 
@@ -1074,8 +1074,8 @@ async function startQuiz() {
       btn.textContent = '开始答题';
       return;
     }
-    if (judgeQs.length < 2) {
-      toast(`判断题数量不足！当前只有 ${judgeQs.length} 道，需要至少 2 道。`);
+    if (judgeQs.length < 4) {
+      toast(`判断题数量不足！当前只有 ${judgeQs.length} 道，需要至少 4 道。`);
       btn.disabled = false;
       btn.textContent = '开始答题';
       return;
