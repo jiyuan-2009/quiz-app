@@ -331,9 +331,6 @@ app.post('/api/records', async (req, res) => {
       '答题用时': timeUsed || ''
     };
 
-    const baseToken = process.env.FEISHU_BASE_TOKEN;
-    const tableId = process.env.RECORD_TABLE_ID;
-
     const result = await feishuRequest(
       'POST',
       `/bitable/v1/apps/${baseToken}/tables/${tableId}/records`,
