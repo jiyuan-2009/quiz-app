@@ -605,27 +605,11 @@
   </div>
 
   <!-- 结果页 -->
-  <div id="page-result" class="page">
-    <div class="back-btn" onclick="showPage('home')">← 返回首页</div>
-    <div class="header">
-      <h1>🎉 答题完成</h1>
-      <p>恭喜您完成答题</p>
-    </div>
+    <div id="page-result" class="page">
     <div class="card result-card">
       <div class="result-score" id="result-score">0</div>
       <div class="result-label">总得分</div>
-      <div class="prize-badge" id="prize-badge">未获奖</div>
-      <div class="result-info">
-        <p><strong>姓名：</strong><span id="r-name"></span></p>
-        <p><strong>团队：</strong><span id="r-team"></span></p>
-        <p><strong>电话：</strong><span id="r-phone"></span></p>
-        <p><strong>答对题数：</strong><span id="r-correct"></span> / 8 题</p>
-        <p><strong>答题时间：</strong><span id="r-time"></span></p>
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-secondary" onclick="showPage('home')">返回首页</button>
-        <button class="btn btn-primary" onclick="restartQuiz()">再答一次</button>
-      </div>
+      <p style="color:#888;font-size:14px;margin-top:20px;">感谢您的参与！</p>
     </div>
   </div>
 
@@ -1196,15 +1180,8 @@ async function submitQuiz() {
     console.error('提交记录失败:', err);
   }
 
-  // 显示结果
+  // 显示结果（只显示总分）
   document.getElementById('result-score').textContent = score;
-  document.getElementById('prize-badge').textContent = prizeText;
-  document.getElementById('prize-badge').className = 'prize-badge ' + prizeClass;
-  document.getElementById('r-name').textContent = quizState.user.name;
-  document.getElementById('r-team').textContent = quizState.user.team;
-  document.getElementById('r-phone').textContent = quizState.user.phone;
-  document.getElementById('r-correct').textContent = correctCount;
-  document.getElementById('r-time').textContent = timeStr;
 
   showPage('result');
 }
