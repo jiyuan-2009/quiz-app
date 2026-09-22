@@ -1005,10 +1005,22 @@ async function startQuiz() {
 
   const btn = document.getElementById('start-btn');
   btn.disabled = true;
-  btn.textContent = '加载题目中...';
 
   try {
-    // 从后端获取题目
+       btn.textContent = '验证中...';
+
+    // 检查是否已答过题
+    const checkRes = await fetch(`${API_BASE}/records/check/${phone}`);
+    const checkData = await checkRes.json();
+    if (checkData.success && checkData.exists) {
+      toast('该手机号已参与过答题，每人仅限一次');
+      btn.disabled = false;
+      btn.textContent = '开始答题';
+      return;
+    }
+
+    btn.textContent = '加载题目中...';
+   // 从后端获取题目
     const res = await fetch(`${API_BASE}/questions`);
     const data = await res.json();
 
