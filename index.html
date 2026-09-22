@@ -1033,10 +1033,34 @@ async function startQuiz() {
 
     const questions = data.data;
 
-    // 按类型抽取
-    const singleQs = pickRandom(questions.filter(q => q.type === 'single'), 4);
-    const multiQs = pickRandom(questions.filter(q => q.type === 'multi'), 2);
-    const judgeQs = pickRandom(questions.filter(q => q.type === 'judge'), 2);
+    // 按题型+难度分层抽题，保证每套试卷难度均衡
+    // 配比：单选4(简单1+中等2+困难1) + 多选2(中等1+困难1) + 判断2(简单1+中等1) = 8道
+    const singleEasy = pickRandom(questions.filter(q => q.type === 'single' && q.difficulty === 'easy'), 1);
+    const singleMedium = pickRandom(questions.filter(q => q.type === 'single' && q.difficulty === 'medium'), 2);
+    const singleHard = pickRandom(questions.filter(q => q.type === 'single' && q.difficulty === 'hard'), 1);
+    const multiMedium = pickRandom(questions.filter(q => q.type === 'multi' && q.difficulty === 'medium'), 1);
+    const multiHard = pickRandom(questions.filter(q => q.type === 'multi' && q.difficulty === 'hard'), 1);
+    const judgeEasy = pickRandom(questions.filter(q => q.type === 'judge' && q.difficulty === 'easy'), 1);
+    const judgeMedium = pickRandom(questions.filter(q => q.type === 'judge' && q.difficulty === 'medium'), 1);
+
+    // 某难度题量不足时，用同题型其他难度兜底
+    const singleQs = [...singleEasy, ...singleMedium, ...singleHard];
+    if (singleQs.length < 4) {
+      const backup = pickRandom(questions.filter(q => q.type === 'single' && !singleQs.find(s => s.id === q.id)), 4 - singleQs.length);
+      singleQs.push(...backup);
+    }
+
+    const multiQs = [...multiMedium, ...multiHard];
+    if (multiQs.length < 2) {
+      const backup = pickRandom(questions.filter(q => q.type === 'multi' && !multiQs.find(m => m.id === q.id)), 2 - multiQs.length);
+      multiQs.push(...backup);
+    }
+
+    const judgeQs = [...judgeEasy, ...judgeMedium];
+    if (judgeQs.length < 2) {
+      const backup = pickRandom(questions.filter(q => q.type === 'judge' && !judgeQs.find(j => j.id === q.id)), 2 - judgeQs.length);
+      judgeQs.push(...backup);
+    }
 
     if (singleQs.length < 4) {
       toast(`单选题数量不足！当前只有 ${singleQs.length} 道，需要至少 4 道。`);
