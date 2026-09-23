@@ -628,9 +628,17 @@
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    gap: 12px;
+  }
+  .wl-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
   }
   .whitelist-info {
     flex: 1;
+    min-width: 0;
   }
   .whitelist-name {
     font-size: 16px;
@@ -659,6 +667,23 @@
     background: #ffebee;
     color: #f44336;
   }
+  .whitelist-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .whitelist-edit {
+    background: none;
+    border: none;
+    color: #4a90d9;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 6px;
+  }
+  .whitelist-edit:hover {
+    background: #e8f0fe;
+  }
   .whitelist-delete {
     background: none;
     border: none;
@@ -670,6 +695,47 @@
   }
   .whitelist-delete:hover {
     background: #ffebee;
+  }
+  .batch-bar {
+    background: #fff;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .batch-bar .batch-info {
+    font-size: 14px;
+    color: #666;
+  }
+  .batch-bar .batch-info strong {
+    color: #4a90d9;
+    font-size: 16px;
+  }
+  .batch-bar .batch-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .batch-bar .btn {
+    width: auto;
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+  .select-all-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #666;
+  }
+  .select-all-row input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
   }
   .pagination {
     display: flex;
@@ -693,6 +759,49 @@
   }
   .pagination button:disabled {
     opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .duplicate-warning {
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+    color: #d48806;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .batch-edit-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .batch-edit-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .batch-edit-field input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .batch-edit-field label {
+    font-size: 14px;
+    color: #333;
+    min-width: 60px;
+    flex-shrink: 0;
+  }
+  .batch-edit-field input[type="text"], .batch-edit-field select {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+  }
+  .batch-edit-field input:disabled, .batch-edit-field select:disabled {
+    background: #f5f5f5;
     cursor: not-allowed;
   }
 </style>
@@ -822,6 +931,21 @@
       </button>
     </div>
     <div id="whitelist-import-result" style="display:none;margin:12px 0;padding:12px;border-radius:8px;font-size:13px;"></div>
+
+    <!-- 批量操作栏 -->
+    <div id="batch-bar" class="batch-bar" style="display:none">
+      <div class="batch-info">已选择 <strong id="selected-count">0</strong> 人</div>
+      <div class="batch-actions">
+        <button class="btn btn-secondary" onclick="openBatchEditModal()">✏️ 批量编辑</button>
+        <button class="btn btn-danger" onclick="batchDeleteWhitelist()">🗑️ 批量删除</button>
+      </div>
+    </div>
+
+    <div class="select-all-row">
+      <input type="checkbox" id="wl-select-all" onclick="toggleSelectAll()">
+      <label for="wl-select-all">全选当前页</label>
+    </div>
+
     <div id="whitelist-list">
       <div class="loading"><div class="loading-spinner"></div>加载中...</div>
     </div>
@@ -836,9 +960,10 @@
         <span class="close" onclick="closeWhitelistModal()">&times;</span>
       </div>
       <div class="modal-body">
+        <div id="add-duplicate-warning" class="duplicate-warning" style="display:none"></div>
         <div class="form-group">
           <label>姓名 <span style="color:red">*</span></label>
-          <input type="text" id="wl-name" placeholder="请输入姓名">
+          <input type="text" id="wl-name" placeholder="请输入姓名" oninput="checkDuplicateName()">
         </div>
         <div class="form-group">
           <label>部门 <span style="color:red">*</span></label>
@@ -855,7 +980,84 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeWhitelistModal()">取消</button>
-        <button class="btn btn-primary" onclick="addWhitelist()">确认添加</button>
+        <button class="btn btn-primary" id="wl-add-btn" onclick="addWhitelist()">确认添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量编辑弹窗 -->
+  <div id="batch-edit-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>批量编辑</h3>
+        <span class="close" onclick="closeBatchEditModal()">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:#666;margin-bottom:16px">勾选要修改的字段，填写新值后确认。未勾选的字段保持不变。</p>
+        <div class="batch-edit-fields">
+          <div class="batch-edit-field">
+            <input type="checkbox" id="batch-field-team" onchange="toggleBatchField('team')">
+            <label>部门</label>
+            <input type="text" id="batch-value-team" placeholder="请输入新部门" disabled>
+          </div>
+          <div class="batch-edit-field">
+            <input type="checkbox" id="batch-field-phone" onchange="toggleBatchField('phone')">
+            <label>手机号</label>
+            <input type="text" id="batch-value-phone" placeholder="请输入新手机号" disabled>
+          </div>
+          <div class="batch-edit-field">
+            <input type="checkbox" id="batch-field-status" onchange="toggleBatchField('status')">
+            <label>状态</label>
+            <select id="batch-value-status" disabled>
+              <option value="启用">启用</option>
+              <option value="禁用">禁用</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBatchEditModal()">取消</button>
+        <button class="btn btn-primary" onclick="batchUpdateWhitelist()">确认修改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑单个白名单人员弹窗 -->
+  <div id="edit-whitelist-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>编辑人员信息</h3>
+        <span class="close" onclick="closeEditWhitelistModal()">&times;</span>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-wl-id">
+        <div class="form-group">
+          <label>姓名</label>
+          <input type="text" id="edit-wl-name" placeholder="姓名" readonly style="background:#f5f5f5">
+        </div>
+        <div class="form-group">
+          <label>部门</label>
+          <input type="text" id="edit-wl-team" placeholder="请输入部门">
+        </div>
+        <div class="form-group">
+          <label>手机号</label>
+          <input type="text" id="edit-wl-phone" placeholder="请输入手机号">
+        </div>
+        <div class="form-group">
+          <label>工号</label>
+          <input type="text" id="edit-wl-employeeno" placeholder="请输入工号">
+        </div>
+        <div class="form-group">
+          <label>状态</label>
+          <select id="edit-wl-status">
+            <option value="启用">启用</option>
+            <option value="禁用">禁用</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEditWhitelistModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveEditWhitelist()">保存</button>
       </div>
     </div>
   </div>
@@ -1078,6 +1280,7 @@ function showPage(pageId) {
   if (pageId === 'bank') loadQuestions();
   if (pageId === 'records') loadRecords();
   if (pageId === 'qrcode') generateQRCode();
+  if (pageId === 'whitelist') loadWhitelist();
 }
 
 // 检查 URL hash（扫码入口）
@@ -1104,7 +1307,10 @@ function adminLogin() {
   if (pwd === 'admin123') {
     isAdmin = true;
     document.getElementById('admin-pwd').value = '';
-    showPage('bank');
+    // 支持登录后跳转到指定页面
+    const target = window._afterAdminLogin || 'bank';
+    window._afterAdminLogin = null;
+    showPage(target);
     toast('登录成功');
   } else {
     toast('密码错误');
@@ -1854,42 +2060,16 @@ let whitelistPage = 1;
 const whitelistPageSize = 20;
 let whitelistKeyword = '';
 let whitelistTotal = 0;
+let selectedWhitelistIds = new Set(); // 选中的ID集合
+let currentWhitelistItems = []; // 当前页数据
 
 function checkWhitelistAdmin() {
   if (isAdmin) {
     showPage('whitelist');
   } else {
     showPage('admin-login');
-    // 登录后跳转到白名单页面
     window._afterAdminLogin = 'whitelist';
   }
-}
-
-// 修改adminLogin以支持登录后跳转
-const _origAdminLogin = adminLogin;
-adminLogin = function() {
-  const pwd = document.getElementById('admin-pwd').value;
-  if (pwd === 'admin123') {
-    isAdmin = true;
-    document.getElementById('admin-pwd').value = '';
-    const target = window._afterAdminLogin || 'bank';
-    window._afterAdminLogin = null;
-    showPage(target);
-    toast('登录成功');
-  } else {
-    toast('密码错误');
-  }
-};
-
-function showPage(pageId) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-' + pageId).classList.add('active');
-  window.scrollTo(0, 0);
-
-  if (pageId === 'bank') loadQuestions();
-  if (pageId === 'records') loadRecords();
-  if (pageId === 'qrcode') generateQRCode();
-  if (pageId === 'whitelist') loadWhitelist();
 }
 
 async function loadWhitelist() {
@@ -1908,11 +2088,15 @@ async function loadWhitelist() {
 
     if (data.success) {
       whitelistTotal = data.total || 0;
+      currentWhitelistItems = data.data || [];
       document.getElementById('whitelist-count').textContent = `共 ${whitelistTotal} 人`;
 
-      if (data.data && data.data.length > 0) {
-        list.innerHTML = data.data.map(item => `
+      if (currentWhitelistItems.length > 0) {
+        list.innerHTML = currentWhitelistItems.map(item => {
+          const checked = selectedWhitelistIds.has(item.id) ? 'checked' : '';
+          return `
           <div class="whitelist-item">
+            <input type="checkbox" class="wl-checkbox" data-id="${item.id}" ${checked} onclick="toggleSelectWhitelist('${item.id}')">
             <div class="whitelist-info">
               <div class="whitelist-name">${escapeHtml(item.name)}</div>
               <div class="whitelist-meta">
@@ -1922,19 +2106,70 @@ async function loadWhitelist() {
                 <span class="whitelist-status ${item.status === '禁用' ? 'status-disabled' : 'status-active'}">${item.status || '启用'}</span>
               </div>
             </div>
-            <button class="whitelist-delete" onclick="deleteWhitelist('${item.id}', '${escapeHtml(item.name)}')">删除</button>
+            <div class="whitelist-actions">
+              <button class="whitelist-edit" onclick="openEditWhitelistModal('${item.id}')">编辑</button>
+              <button class="whitelist-delete" onclick="deleteWhitelist('${item.id}', '${escapeHtml(item.name)}')">删除</button>
+            </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
         renderWhitelistPagination();
+        updateSelectAllState();
+        updateBatchBar();
       } else {
         list.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">暂无白名单人员</div></div>';
         document.getElementById('whitelist-pagination').innerHTML = '';
+        document.getElementById('batch-bar').style.display = 'none';
       }
     } else {
       list.innerHTML = `<div class="empty"><div class="empty-icon">❌</div><div class="empty-text">加载失败：${data.error}</div></div>`;
     }
   } catch (err) {
     list.innerHTML = `<div class="empty"><div class="empty-icon">❌</div><div class="empty-text">加载失败：${err.message}</div></div>`;
+  }
+}
+
+function toggleSelectWhitelist(id) {
+  if (selectedWhitelistIds.has(id)) {
+    selectedWhitelistIds.delete(id);
+  } else {
+    selectedWhitelistIds.add(id);
+  }
+  updateSelectAllState();
+  updateBatchBar();
+}
+
+function toggleSelectAll() {
+  const selectAll = document.getElementById('wl-select-all');
+  if (selectAll.checked) {
+    currentWhitelistItems.forEach(item => selectedWhitelistIds.add(item.id));
+  } else {
+    currentWhitelistItems.forEach(item => selectedWhitelistIds.delete(item.id));
+  }
+  // 更新所有复选框状态
+  document.querySelectorAll('.wl-checkbox').forEach(cb => {
+    cb.checked = selectAll.checked;
+  });
+  updateBatchBar();
+}
+
+function updateSelectAllState() {
+  const selectAll = document.getElementById('wl-select-all');
+  if (!selectAll || currentWhitelistItems.length === 0) return;
+  const allSelected = currentWhitelistItems.every(item => selectedWhitelistIds.has(item.id));
+  const someSelected = currentWhitelistItems.some(item => selectedWhitelistIds.has(item.id));
+  selectAll.checked = allSelected;
+  selectAll.indeterminate = someSelected && !allSelected;
+}
+
+function updateBatchBar() {
+  const bar = document.getElementById('batch-bar');
+  const countEl = document.getElementById('selected-count');
+  if (selectedWhitelistIds.size > 0) {
+    bar.style.display = 'flex';
+    countEl.textContent = selectedWhitelistIds.size;
+  } else {
+    bar.style.display = 'none';
   }
 }
 
@@ -1976,20 +2211,55 @@ function searchWhitelist() {
   whitelistSearchTimer = setTimeout(() => {
     whitelistKeyword = document.getElementById('whitelist-search').value.trim();
     whitelistPage = 1;
+    selectedWhitelistIds.clear();
     loadWhitelist();
   }, 300);
 }
+
+// ===== 添加人员 + 重名校验 =====
+let duplicateCheckTimer = null;
 
 function openAddWhitelistModal() {
   document.getElementById('wl-name').value = '';
   document.getElementById('wl-team').value = '武威基地';
   document.getElementById('wl-phone').value = '';
   document.getElementById('wl-employeeno').value = '';
+  document.getElementById('add-duplicate-warning').style.display = 'none';
+  document.getElementById('wl-add-btn').disabled = false;
   document.getElementById('whitelist-modal').classList.add('show');
 }
 
 function closeWhitelistModal() {
   document.getElementById('whitelist-modal').classList.remove('show');
+}
+
+function checkDuplicateName() {
+  const name = document.getElementById('wl-name').value.trim();
+  const warning = document.getElementById('add-duplicate-warning');
+  const addBtn = document.getElementById('wl-add-btn');
+
+  if (!name) {
+    warning.style.display = 'none';
+    addBtn.disabled = false;
+    return;
+  }
+
+  clearTimeout(duplicateCheckTimer);
+  duplicateCheckTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/whitelist/check?name=${encodeURIComponent(name)}`);
+      const data = await res.json();
+      if (data.success && data.inWhitelist) {
+        warning.innerHTML = `⚠️ 白名单中已存在同名人员，请确认是否重复添加`;
+        warning.style.display = 'block';
+        // 重名时不禁用按钮，只提示，让用户自己判断
+      } else {
+        warning.style.display = 'none';
+      }
+    } catch (e) {
+      // 校验失败不影响添加
+    }
+  }, 400);
 }
 
 async function addWhitelist() {
@@ -2016,13 +2286,19 @@ async function addWhitelist() {
       closeWhitelistModal();
       loadWhitelist();
     } else {
-      toast('添加失败：' + (data.error || '未知错误'));
+      if (data.duplicate) {
+        document.getElementById('add-duplicate-warning').innerHTML = `❌ ${data.error}`;
+        document.getElementById('add-duplicate-warning').style.display = 'block';
+      } else {
+        toast('添加失败：' + (data.error || '未知错误'));
+      }
     }
   } catch (err) {
     toast('添加失败：' + err.message);
   }
 }
 
+// ===== 单条删除 =====
 async function deleteWhitelist(id, name) {
   if (!confirm(`确定要删除「${name}」吗？`)) return;
 
@@ -2032,7 +2308,7 @@ async function deleteWhitelist(id, name) {
 
     if (data.success) {
       toast('删除成功');
-      // 如果当前页删完了，回到上一页
+      selectedWhitelistIds.delete(id);
       const currentPageItems = (whitelistTotal - 1) % whitelistPageSize;
       if (currentPageItems === 0 && whitelistPage > 1) {
         whitelistPage--;
@@ -2046,6 +2322,169 @@ async function deleteWhitelist(id, name) {
   }
 }
 
+// ===== 批量删除 =====
+async function batchDeleteWhitelist() {
+  const count = selectedWhitelistIds.size;
+  if (count === 0) {
+    toast('请先选择要删除的人员');
+    return;
+  }
+  if (!confirm(`确定要删除选中的 ${count} 人吗？此操作不可恢复。`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/whitelist/batch-delete`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.from(selectedWhitelistIds) })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      toast(`删除完成：成功 ${data.data.successCount} 条，失败 ${data.data.failCount} 条`);
+      selectedWhitelistIds.clear();
+      const remaining = whitelistTotal - data.data.successCount;
+      const totalPages = Math.ceil(remaining / whitelistPageSize);
+      if (whitelistPage > totalPages && totalPages > 0) {
+        whitelistPage = totalPages;
+      }
+      loadWhitelist();
+    } else {
+      toast('删除失败：' + (data.error || '未知错误'));
+    }
+  } catch (err) {
+    toast('删除失败：' + err.message);
+  }
+}
+
+// ===== 单条编辑 =====
+function openEditWhitelistModal(id) {
+  const item = currentWhitelistItems.find(i => i.id === id);
+  if (!item) return;
+
+  document.getElementById('edit-wl-id').value = id;
+  document.getElementById('edit-wl-name').value = item.name;
+  document.getElementById('edit-wl-team').value = item.team || '';
+  document.getElementById('edit-wl-phone').value = item.phone || '';
+  document.getElementById('edit-wl-employeeno').value = item.employeeNo || '';
+  document.getElementById('edit-wl-status').value = item.status || '启用';
+  document.getElementById('edit-whitelist-modal').classList.add('show');
+}
+
+function closeEditWhitelistModal() {
+  document.getElementById('edit-whitelist-modal').classList.remove('show');
+}
+
+async function saveEditWhitelist() {
+  const id = document.getElementById('edit-wl-id').value;
+  const team = document.getElementById('edit-wl-team').value.trim();
+  const phone = document.getElementById('edit-wl-phone').value.trim();
+  const employeeNo = document.getElementById('edit-wl-employeeno').value.trim();
+  const status = document.getElementById('edit-wl-status').value;
+
+  if (!team) {
+    toast('部门不能为空');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/whitelist/batch-update`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ids: [id],
+        fields: { '部门': team, '手机号': phone, '工号': employeeNo, '状态': status }
+      })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      toast('保存成功');
+      closeEditWhitelistModal();
+      loadWhitelist();
+    } else {
+      toast('保存失败：' + (data.error || '未知错误'));
+    }
+  } catch (err) {
+    toast('保存失败：' + err.message);
+  }
+}
+
+// ===== 批量编辑 =====
+function openBatchEditModal() {
+  if (selectedWhitelistIds.size === 0) {
+    toast('请先选择要编辑的人员');
+    return;
+  }
+  // 重置表单
+  ['team', 'phone', 'status'].forEach(field => {
+    document.getElementById('batch-field-' + field).checked = false;
+    const input = document.getElementById('batch-value-' + field);
+    input.disabled = true;
+    if (input.tagName === 'SELECT') {
+      input.selectedIndex = 0;
+    } else {
+      input.value = '';
+    }
+  });
+  document.getElementById('batch-edit-modal').classList.add('show');
+}
+
+function closeBatchEditModal() {
+  document.getElementById('batch-edit-modal').classList.remove('show');
+}
+
+function toggleBatchField(field) {
+  const checkbox = document.getElementById('batch-field-' + field);
+  const input = document.getElementById('batch-value-' + field);
+  input.disabled = !checkbox.checked;
+  if (checkbox.checked) {
+    input.focus();
+  }
+}
+
+async function batchUpdateWhitelist() {
+  const fields = {};
+  const fieldMap = { team: '部门', phone: '手机号', status: '状态' };
+
+  for (const [key, fieldName] of Object.entries(fieldMap)) {
+    const checkbox = document.getElementById('batch-field-' + key);
+    if (checkbox.checked) {
+      const input = document.getElementById('batch-value-' + key);
+      const value = input.value.trim();
+      if (key !== 'status' && !value) {
+        toast(`${fieldName}不能为空`);
+        return;
+      }
+      fields[fieldName] = value;
+    }
+  }
+
+  if (Object.keys(fields).length === 0) {
+    toast('请至少勾选一个要修改的字段');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/whitelist/batch-update`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.from(selectedWhitelistIds), fields })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      toast(`修改完成：成功 ${data.data.successCount} 条，失败 ${data.data.failCount} 条`);
+      closeBatchEditModal();
+      loadWhitelist();
+    } else {
+      toast('修改失败：' + (data.error || '未知错误'));
+    }
+  } catch (err) {
+    toast('修改失败：' + err.message);
+  }
+}
+
+// ===== 导出 =====
 async function exportWhitelist() {
   try {
     const res = await fetch(`${API_BASE}/whitelist/export`);
