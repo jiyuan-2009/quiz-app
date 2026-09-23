@@ -150,7 +150,7 @@ app.get('/api/questions', async (req, res) => {
           question: f['题目内容'] || '',
           options,
           answer,
-          score: f['分值'] || (typeMap[typeText] === 'multi' ? 20 : 10),
+          score: Number(f['分值']) || (typeMap[typeText] === 'multi' ? 20 : 10),
           difficulty: difficultyMap[difficultyText] || 'medium'
         };
       });
@@ -398,8 +398,8 @@ app.get('/api/records', async (req, res) => {
         name: f['姓名'] || '',
         team: f['团队'] || '',
         phone: f['电话号码'] || '',
-        score: f['得分'] || 0,
-        correctCount: f['答对题数'] || 0,
+        score: Number(f['得分']) || 0,
+        correctCount: Number(f['答对题数']) || 0,
         prize: Array.isArray(prizeField) ? prizeField[0] : prizeField || '谢谢参与',
         timeUsed: f['答题用时'] || '',
         createdAt: f['答题时间'] || item.created_time
