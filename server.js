@@ -3,6 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
+const xlsx = require('xlsx');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -259,6 +260,225 @@ app.delete('/api/questions/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('删除题目失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ========== 题库批量导入导出 ==========
+
+// 导出题库为 Excel
+app.get('/api/questions/export', async (req, res) => {
+  try {
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.QUIZ_TABLE_ID;
+    const token = await getTenantToken();
+
+    // 分页获取所有题目
+    let allItems = [];
+    let pageToken = null;
+    do {
+      const params = new URLSearchParams({ page_size: 100 });
+      if (pageToken) params.append('page_token', pageToken);
+      const resp = await axios.get(
+        `${FEISHU_BASE}/bitable/v1/apps/${baseToken}/tables/${tableId}/records?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      allItems = allItems.concat(resp.data.data.items);
+      pageToken = resp.data.data.has_more ? resp.data.data.page_token : null;
+    } while (pageToken);
+
+    // 转换为 Excel 行
+    const typeMap = { '单选': 'single', '多选': 'multi', '判断': 'judge' };
+    const rows = allItems.map(item => {
+      const f = item.fields;
+      const typeText = Array.isArray(f['题目类型']) ? f['题目类型'][0] : f['题目类型'];
+      const difficultyText = Array.isArray(f['难度']) ? f['难度'][0] : f['难度'];
+      const statusText = Array.isArray(f['状态']) ? f['状态'][0] : f['状态'];
+
+      // 解析答案
+      let answerText = f['正确答案'] || '';
+      if (Array.isArray(answerText)) answerText = answerText[0] || '';
+
+      return {
+        '题目类型': typeText || '',
+        '题目内容': f['题目内容'] || '',
+        '选项A': f['选项A'] || '',
+        '选项B': f['选项B'] || '',
+        '选项C': f['选项C'] || '',
+        '选项D': f['选项D'] || '',
+        '正确答案': answerText,
+        '分值': Number(f['分值']) || 0,
+        '难度': difficultyText || '',
+        '状态': statusText || '启用'
+      };
+    });
+
+    // 生成 Excel
+    const ws = xlsx.utils.json_to_sheet(rows);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, '题库');
+
+    // 设置列宽
+    ws['!cols'] = [
+      { wch: 10 }, { wch: 50 }, { wch: 30 }, { wch: 30 },
+      { wch: 30 }, { wch: 30 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 8 }
+    ];
+
+    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const fileName = `题库导出_${new Date().toISOString().slice(0,10)}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    res.send(buf);
+
+  } catch (err) {
+    console.error('导出失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 批量导入题库（Excel base64）
+app.post('/api/questions/import', async (req, res) => {
+  try {
+    const { fileBase64, fileName } = req.body;
+    if (!fileBase64) {
+      return res.status(400).json({ success: false, error: '请上传文件' });
+    }
+
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.QUIZ_TABLE_ID;
+    const token = await getTenantToken();
+
+    // 解析 Excel
+    const buf = Buffer.from(fileBase64, 'base64');
+    const wb = xlsx.read(buf, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = xlsx.utils.sheet_to_json(ws);
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, error: '文件中没有数据' });
+    }
+
+    // 逐行解析并写入
+    const typeMap = {
+      '单选': '单选', '单选题': '单选', 'single': '单选',
+      '多选': '多选', '多选题': '多选', 'multi': '多选',
+      '判断': '判断', '判断题': '判断', 'judge': '判断'
+    };
+
+    let successCount = 0;
+    let failCount = 0;
+    const errors = [];
+
+    // 批量写入，每次最多 500 条（飞书限制）
+    const batchSize = 100;
+    const records = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNum = i + 2; // Excel 行号，第1行是表头
+
+      try {
+        const typeRaw = String(row['题目类型'] || row['题型'] || '').trim();
+        const type = typeMap[typeRaw] || typeRaw;
+        if (!type || !['单选', '多选', '判断'].includes(type)) {
+          throw new Error(`题目类型无效: "${typeRaw}"`);
+        }
+
+        const question = String(row['题目内容'] || row['题目'] || '').trim();
+        if (!question) {
+          throw new Error('题目内容为空');
+        }
+
+        const optionA = String(row['选项A'] || row['A'] || '').trim();
+        const optionB = String(row['选项B'] || row['B'] || '').trim();
+        const optionC = String(row['选项C'] || row['C'] || '').trim();
+        const optionD = String(row['选项D'] || row['D'] || '').trim();
+
+        // 判断题只有两个选项
+        let fields = {
+          '题目类型': type,
+          '题目内容': question,
+        };
+
+        if (type === '判断') {
+          fields['选项A'] = '正确';
+          fields['选项B'] = '错误';
+        } else {
+          if (optionA) fields['选项A'] = optionA;
+          if (optionB) fields['选项B'] = optionB;
+          if (optionC) fields['选项C'] = optionC;
+          if (optionD) fields['选项D'] = optionD;
+        }
+
+        // 正确答案
+        let answer = String(row['正确答案'] || row['答案'] || '').trim().toUpperCase();
+        if (!answer) {
+          throw new Error('正确答案为空');
+        }
+
+        // 判断题特殊处理
+        if (type === '判断') {
+          if (['正确', '对', '是', 'TRUE', 'T', 'A', '0'].includes(answer.toUpperCase())) {
+            answer = 'A';
+          } else if (['错误', '错', '否', 'FALSE', 'F', 'B', '1'].includes(answer.toUpperCase())) {
+            answer = 'B';
+          }
+        }
+
+        // 标准化答案格式（统一存为连写，如 ABC）
+        if (answer.includes(',') || answer.includes('，') || answer.includes('、')) {
+          answer = answer.split(/[,，、]/).map(a => a.trim().toUpperCase()).filter(Boolean).join('');
+        }
+        // 去掉空格
+        answer = answer.replace(/\s/g, '');
+
+        fields['正确答案'] = answer;
+
+        // 分值
+        const score = Number(row['分值'] || row['分数']) || 0;
+        if (score > 0) fields['分值'] = score;
+
+        // 难度
+        const difficulty = String(row['难度'] || '').trim();
+        if (difficulty && ['简单', '中等', '困难'].includes(difficulty)) {
+          fields['难度'] = difficulty;
+        }
+
+        // 状态
+        const status = String(row['状态'] || '启用').trim();
+        fields['状态'] = status === '禁用' ? '禁用' : '启用';
+
+        records.push({ fields });
+        successCount++;
+      } catch (err) {
+        failCount++;
+        errors.push(`第${lineNum}行: ${err.message}`);
+      }
+    }
+
+    // 批量写入飞书
+    if (records.length > 0) {
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize);
+        await axios.post(
+          `${FEISHU_BASE}/bitable/v1/apps/${baseToken}/tables/${tableId}/records/batch_create`,
+          { records: batch },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      total: rows.length,
+      successCount,
+      failCount,
+      errors: errors.slice(0, 20) // 最多返回20条错误
+    });
+
+  } catch (err) {
+    console.error('导入失败:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

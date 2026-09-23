@@ -462,6 +462,26 @@
     opacity: 0.9;
   }
 
+  .bank-actions {
+    display: flex;
+    gap: 10px;
+    margin: 12px 0;
+    flex-wrap: wrap;
+  }
+  .bank-action-btn {
+    flex: 1;
+    min-width: 120px;
+    font-size: 14px;
+    padding: 10px 16px;
+  }
+  .import-btn-label {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
   .fab {
     position: fixed;
     bottom: 30px;
@@ -664,6 +684,16 @@
       <div class="tab" data-type="multi" onclick="filterBank('multi')">多选</div>
       <div class="tab" data-type="judge" onclick="filterBank('judge')">判断</div>
     </div>
+    <div class="bank-actions">
+      <button class="btn btn-secondary bank-action-btn" onclick="exportQuestions()">
+        📤 导出题库
+      </button>
+      <label class="btn btn-primary bank-action-btn import-btn-label">
+        📥 批量导入
+        <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
+      </label>
+    </div>
+    <div id="import-result" style="display:none;margin:12px 0;padding:12px;border-radius:8px;font-size:13px;"></div>
     <div id="question-list">
       <div class="loading"><div class="loading-spinner"></div>加载中...</div>
     </div>
@@ -1121,6 +1151,97 @@ async function deleteQuestion(id) {
   } catch (err) {
     toast('网络错误：' + err.message);
   }
+}
+
+// ========== 题库导入导出 ==========
+function exportQuestions() {
+  const url = `${API_BASE}/questions/export`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `题库_${new Date().toISOString().slice(0,10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast('正在导出题库...');
+}
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!file.name.match(/\.(xlsx|xls)$/i)) {
+    toast('请上传 Excel 文件（.xlsx 或 .xls）');
+    event.target.value = '';
+    return;
+  }
+
+  if (!confirm(`确定要导入文件「${file.name}」吗？\n导入的题目将追加到现有题库中。`)) {
+    event.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  const resultDiv = document.getElementById('import-result');
+  resultDiv.style.display = 'block';
+  resultDiv.style.background = '#e6f7ff';
+  resultDiv.style.border = '1px solid #91d5ff';
+  resultDiv.style.color = '#0050b3';
+  resultDiv.innerHTML = '⏳ 正在导入，请稍候...';
+
+  reader.onload = async function(e) {
+    try {
+      const base64 = e.target.result.split(',')[1];
+      const res = await fetch(`${API_BASE}/questions/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileBase64: base64,
+          fileName: file.name
+        })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        resultDiv.style.background = '#f6ffed';
+        resultDiv.style.border = '1px solid #b7eb8f';
+        resultDiv.style.color = '#389e0d';
+        let html = `✅ 导入完成！共 ${data.total} 行，成功 ${data.successCount} 条，失败 ${data.failCount} 条`;
+        if (data.errors && data.errors.length > 0) {
+          html += '<div style="margin-top:8px;max-height:150px;overflow-y:auto;font-size:12px;">';
+          data.errors.slice(0, 20).forEach(err => {
+            html += `<div>第${err.row}行：${err.message}</div>`;
+          });
+          if (data.errors.length > 20) {
+            html += `<div>...还有 ${data.errors.length - 20} 条错误</div>`;
+          }
+          html += '</div>';
+        }
+        resultDiv.innerHTML = html;
+        loadQuestions();
+      } else {
+        resultDiv.style.background = '#fff2f0';
+        resultDiv.style.border = '1px solid #ffccc7';
+        resultDiv.style.color = '#cf1322';
+        resultDiv.innerHTML = `❌ 导入失败：${data.error || '未知错误'}`;
+      }
+    } catch (err) {
+      resultDiv.style.background = '#fff2f0';
+      resultDiv.style.border = '1px solid #ffccc7';
+      resultDiv.style.color = '#cf1322';
+      resultDiv.innerHTML = `❌ 网络错误：${err.message}`;
+    }
+    event.target.value = '';
+  };
+
+  reader.onerror = function() {
+    resultDiv.style.background = '#fff2f0';
+    resultDiv.style.border = '1px solid #ffccc7';
+    resultDiv.style.color = '#cf1322';
+    resultDiv.innerHTML = '❌ 文件读取失败';
+    event.target.value = '';
+  };
+
+  reader.readAsDataURL(file);
 }
 
 // ========== 二维码 ==========
