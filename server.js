@@ -574,6 +574,316 @@ app.post('/api/questions/batch-update-scores', async (req, res) => {
   }
 });
 
+// ========== 白名单接口 ==========
+
+// 检查是否在白名单内（按姓名+部门匹配）
+app.get('/api/whitelist/check', async (req, res) => {
+  try {
+    const { name, team, phone } = req.query;
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.WHITELIST_TABLE_ID;
+
+    if (!tableId) {
+      // 未配置白名单表，默认允许
+      return res.json({ success: true, allowed: true, inWhitelist: false });
+    }
+
+    let conditions = [];
+
+    // 优先用手机号匹配
+    if (phone) {
+      conditions.push({
+        field_name: '手机号',
+        operator: 'is',
+        value: [phone]
+      });
+    }
+    // 没有手机号则用姓名+部门匹配
+    else if (name && team) {
+      conditions.push(
+        { field_name: '姓名', operator: 'is', value: [name] },
+        { field_name: '部门', operator: 'is', value: [team] }
+      );
+    } else {
+      return res.status(400).json({ success: false, error: '请提供手机号或姓名+部门' });
+    }
+
+    // 只查启用状态的
+    conditions.push({
+      field_name: '状态',
+      operator: 'is',
+      value: ['启用']
+    });
+
+    const result = await feishuRequest(
+      'POST',
+      `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
+      {
+        filter: {
+          conjunction: 'and',
+          conditions
+        },
+        page_size: 1
+      }
+    );
+
+    const exists = result.data && result.data.items && result.data.items.length > 0;
+    res.json({ success: true, allowed: exists, inWhitelist: exists });
+  } catch (err) {
+    console.error('白名单检查失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 获取白名单列表
+app.get('/api/whitelist', async (req, res) => {
+  try {
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.WHITELIST_TABLE_ID;
+
+    if (!tableId) {
+      return res.json({ success: true, data: [], total: 0 });
+    }
+
+    const { page = 1, pageSize = 50, keyword } = req.query;
+    const pageNum = parseInt(page) || 1;
+    const size = parseInt(pageSize) || 50;
+
+    let allRecords = [];
+    let pageToken = null;
+
+    do {
+      const params = { page_size: 100 };
+      if (pageToken) params.page_token = pageToken;
+
+      const result = await feishuRequest(
+        'GET',
+        `/bitable/v1/apps/${baseToken}/tables/${tableId}/records`,
+        null,
+        params
+      );
+
+      if (result.data && result.data.items) {
+        allRecords = allRecords.concat(result.data.items);
+      }
+      pageToken = result.data && result.data.has_more ? result.data.page_token : null;
+    } while (pageToken && allRecords.length < 2000);
+
+    // 关键词过滤
+    if (keyword) {
+      const kw = keyword.toLowerCase();
+      allRecords = allRecords.filter(item => {
+        const f = item.fields;
+        return (f['姓名'] || '').toLowerCase().includes(kw) ||
+               (f['部门'] || '').toLowerCase().includes(kw) ||
+               (f['手机号'] || '').includes(kw) ||
+               (f['工号'] || '').toLowerCase().includes(kw);
+      });
+    }
+
+    // 分页
+    const total = allRecords.length;
+    const start = (pageNum - 1) * size;
+    const pageData = allRecords.slice(start, start + size).map(item => {
+      const f = item.fields;
+      const statusField = f['状态'];
+      return {
+        id: item.record_id,
+        name: f['姓名'] || '',
+        team: f['部门'] || '',
+        phone: f['手机号'] || '',
+        employeeNo: f['工号'] || '',
+        status: Array.isArray(statusField) ? statusField[0].text : statusField || '启用'
+      };
+    });
+
+    res.json({ success: true, data: pageData, total, page: pageNum, pageSize: size });
+  } catch (err) {
+    console.error('获取白名单失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 添加白名单人员
+app.post('/api/whitelist', async (req, res) => {
+  try {
+    const { name, team, phone, employeeNo } = req.body;
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.WHITELIST_TABLE_ID;
+
+    if (!name || !team) {
+      return res.status(400).json({ success: false, error: '姓名和部门必填' });
+    }
+
+    const fields = {
+      '姓名': name,
+      '部门': team,
+      '状态': '启用'
+    };
+    if (phone) fields['手机号'] = phone;
+    if (employeeNo) fields['工号'] = employeeNo;
+
+    const result = await feishuRequest(
+      'POST',
+      `/bitable/v1/apps/${baseToken}/tables/${tableId}/records`,
+      { fields }
+    );
+
+    res.json({ success: true, data: { record_id: result.data.record && result.data.record.record_id } });
+  } catch (err) {
+    console.error('添加白名单失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 删除白名单人员
+app.delete('/api/whitelist/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.WHITELIST_TABLE_ID;
+
+    await feishuRequest(
+      'DELETE',
+      `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/${id}`
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('删除白名单失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 批量导入白名单（Excel）
+app.post('/api/whitelist/import', async (req, res) => {
+  try {
+    const { fileBase64, fileName } = req.body;
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.WHITELIST_TABLE_ID;
+
+    if (!fileBase64) {
+      return res.status(400).json({ success: false, error: '请上传文件' });
+    }
+
+    const buf = Buffer.from(fileBase64, 'base64');
+    const workbook = xlsx.read(buf, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(worksheet);
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, error: '文件为空' });
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+    let errors = [];
+
+    // 批量写入
+    const batchSize = 100;
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
+      const records = [];
+
+      batch.forEach((row, idx) => {
+        const name = row['姓名'] || row['name'] || '';
+        const team = row['部门'] || row['team'] || '';
+        const phone = String(row['手机号'] || row['phone'] || '').trim();
+        const employeeNo = String(row['工号'] || row['employeeNo'] || '').trim();
+
+        if (!name || !team) {
+          failCount++;
+          errors.push({ row: i + idx + 2, message: '姓名和部门必填' });
+          return;
+        }
+
+        records.push({
+          fields: {
+            '姓名': name,
+            '部门': team,
+            '手机号': phone,
+            '工号': employeeNo,
+            '状态': '启用'
+          }
+        });
+        successCount++;
+      });
+
+      if (records.length > 0) {
+        await feishuRequest(
+          'POST',
+          `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/batch_create`,
+          { records }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      total: rows.length,
+      successCount,
+      failCount,
+      errors
+    });
+  } catch (err) {
+    console.error('导入白名单失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 导出自名单
+app.get('/api/whitelist/export', async (req, res) => {
+  try {
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.WHITELIST_TABLE_ID;
+
+    let allRecords = [];
+    let pageToken = null;
+
+    do {
+      const params = { page_size: 100 };
+      if (pageToken) params.page_token = pageToken;
+
+      const result = await feishuRequest(
+        'GET',
+        `/bitable/v1/apps/${baseToken}/tables/${tableId}/records`,
+        null,
+        params
+      );
+
+      if (result.data && result.data.items) {
+        allRecords = allRecords.concat(result.data.items);
+      }
+      pageToken = result.data && result.data.has_more ? result.data.page_token : null;
+    } while (pageToken && allRecords.length < 5000);
+
+    const data = allRecords.map(item => {
+      const f = item.fields;
+      const statusField = f['状态'];
+      return {
+        '姓名': f['姓名'] || '',
+        '部门': f['部门'] || '',
+        '手机号': f['手机号'] || '',
+        '工号': f['工号'] || '',
+        '状态': Array.isArray(statusField) ? statusField[0].text : statusField || '启用'
+      };
+    });
+
+    const ws = xlsx.utils.json_to_sheet(data);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, '白名单');
+    const excelBuf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="whitelist_${Date.now()}.xlsx"`);
+    res.send(excelBuf);
+  } catch (err) {
+    console.error('导出白名单失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ========== 答题记录接口 ==========
 // 检查手机号是否已答过题
 // 检查是否已答过题（支持手机号 或 姓名+团队 校验）
@@ -632,6 +942,57 @@ app.post('/api/records', async (req, res) => {
 
     if (!name || !team || !phone) {
       return res.status(400).json({ success: false, error: '请填写完整信息' });
+    }
+
+    // 白名单校验：如果配置了白名单表，必须在白名单内才能答题
+    const whitelistTableId = process.env.WHITELIST_TABLE_ID;
+    if (whitelistTableId) {
+      const baseToken = process.env.FEISHU_BASE_TOKEN;
+      let whitelistConditions = [];
+
+      // 优先用手机号匹配
+      whitelistConditions.push(
+        { field_name: '手机号', operator: 'is', value: [phone] },
+        { field_name: '状态', operator: 'is', value: ['启用'] }
+      );
+
+      const whitelistCheck = await feishuRequest(
+        'POST',
+        `/bitable/v1/apps/${baseToken}/tables/${whitelistTableId}/records/search`,
+        {
+          filter: {
+            conjunction: 'and',
+            conditions: whitelistConditions
+          },
+          page_size: 1
+        }
+      );
+
+      let inWhitelist = whitelistCheck.data && whitelistCheck.data.items && whitelistCheck.data.items.length > 0;
+
+      // 手机号没匹配到，再用姓名+部门匹配
+      if (!inWhitelist) {
+        const nameTeamCheck = await feishuRequest(
+          'POST',
+          `/bitable/v1/apps/${baseToken}/tables/${whitelistTableId}/records/search`,
+          {
+            filter: {
+              conjunction: 'and',
+              conditions: [
+                { field_name: '姓名', operator: 'is', value: [name] },
+                { field_name: '部门', operator: 'is', value: [team] },
+                { field_name: '状态', operator: 'is', value: ['启用'] }
+              ]
+            },
+            page_size: 1
+          }
+        );
+        inWhitelist = nameTeamCheck.data && nameTeamCheck.data.items && nameTeamCheck.data.items.length > 0;
+      }
+
+      if (!inWhitelist) {
+        return res.status(400).json({ success: false, error: '您不在答题白名单内，请联系管理员添加' });
+      }
     }
 
     // 内存级防重：同一手机号正在提交中直接拒绝

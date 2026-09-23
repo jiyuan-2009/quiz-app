@@ -1279,6 +1279,16 @@ async function startQuiz() {
   try {
        btn.textContent = '验证中...';
 
+    // 白名单校验
+    const whitelistRes = await fetch(`${API_BASE}/whitelist/check?name=${encodeURIComponent(name)}&team=${encodeURIComponent(team)}&phone=${encodeURIComponent(phone)}`);
+    const whitelistData = await whitelistRes.json();
+    if (whitelistData.success && whitelistData.allowed === false) {
+      toast('您不在答题白名单内，请联系管理员添加');
+      btn.disabled = false;
+      btn.textContent = '开始答题';
+      return;
+    }
+
     // 检查是否已答过题（先查手机号）
     const phoneCheckRes = await fetch(`${API_BASE}/records/check?phone=${encodeURIComponent(phone)}`);
     const phoneCheckData = await phoneCheckRes.json();
