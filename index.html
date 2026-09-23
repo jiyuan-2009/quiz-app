@@ -215,6 +215,19 @@
   .option.selected .option-letter { background: #667eea; border-color: #667eea; color: #fff; }
 
   .result-card { text-align: center; padding: 30px 20px; }
+  .result-prize {
+    display: inline-block;
+    padding: 6px 20px;
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 12px;
+  }
+  .result-prize.prize-1 { background: linear-gradient(135deg, #ffd700, #ffaa00); color: #fff; }
+  .result-prize.prize-2 { background: linear-gradient(135deg, #c0c0c0, #a0a0a0); color: #fff; }
+  .result-prize.prize-3 { background: linear-gradient(135deg, #cd7f32, #b87333); color: #fff; }
+  .result-prize.prize-participation { background: linear-gradient(135deg, #67c23a, #529b2e); color: #fff; }
+  .result-prize.prize-none { background: #f0f2f5; color: #888; }
   .result-score {
     font-size: 64px;
     font-weight: 700;
@@ -237,7 +250,84 @@
   .prize-1 { background: linear-gradient(135deg, #ffd700, #ffaa00); color: #fff; }
   .prize-2 { background: linear-gradient(135deg, #c0c0c0, #a0a0a0); color: #fff; }
   .prize-3 { background: linear-gradient(135deg, #cd7f32, #b87333); color: #fff; }
+  .prize-participation { background: linear-gradient(135deg, #67c23a, #529b2e); color: #fff; }
   .prize-none { background: #f0f2f5; color: #888; }
+
+  /* 错题解析样式 */
+  .wrong-item {
+    background: #fff5f5;
+    border: 1px solid #ffd6d6;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .wrong-item:last-child { margin-bottom: 0; }
+  .wrong-q-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .wrong-q-num {
+    background: #ff4d4f;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .wrong-q-type {
+    font-size: 12px;
+    color: #ff4d4f;
+    background: #fff0f0;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .wrong-q-text {
+    font-size: 14px;
+    color: #333;
+    line-height: 1.6;
+    margin-bottom: 10px;
+    font-weight: 500;
+  }
+  .wrong-options { margin-bottom: 8px; }
+  .wrong-opt {
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .wrong-opt.user-wrong {
+    background: #fff0f0;
+    color: #ff4d4f;
+    border: 1px solid #ffccc7;
+  }
+  .wrong-opt.correct-ans {
+    background: #f0fff4;
+    color: #52c41a;
+    border: 1px solid #b7eb8f;
+  }
+  .wrong-opt.normal {
+    background: #fafafa;
+    color: #666;
+  }
+  .wrong-opt-letter {
+    font-weight: 600;
+    width: 20px;
+    flex-shrink: 0;
+  }
+  .wrong-ans-row {
+    font-size: 12px;
+    color: #999;
+    margin-top: 6px;
+    display: flex;
+    gap: 16px;
+  }
+  .wrong-ans-row .correct { color: #52c41a; }
+  .wrong-ans-row .your { color: #ff4d4f; }
   .result-info {
     background: #fafbfc;
     border-radius: 12px;
@@ -489,9 +579,11 @@
     <div class="card">
       <h2>🏆 奖项设置</h2>
       <div class="prize-rules">
-        <p><span class="prize-dot" style="background:#ffd700"></span> <strong>一等奖：</strong>100 分（满分）</p>
-        <p><span class="prize-dot" style="background:#c0c0c0"></span> <strong>二等奖：</strong>90 ~ 99 分</p>
-        <p><span class="prize-dot" style="background:#cd7f32"></span> <strong>三等奖：</strong>80 ~ 89 分</p>
+        <p><span class="prize-dot" style="background:#ffd700"></span> <strong>一等奖：</strong>91 ~ 100 分</p>
+        <p><span class="prize-dot" style="background:#c0c0c0"></span> <strong>二等奖：</strong>81 ~ 90 分</p>
+        <p><span class="prize-dot" style="background:#cd7f32"></span> <strong>三等奖：</strong>71 ~ 80 分</p>
+        <p><span class="prize-dot" style="background:#67c23a"></span> <strong>参与奖：</strong>60 ~ 70 分</p>
+        <p><span class="prize-dot" style="background:#ccc"></span> <strong>60分以下：</strong>谢谢参与</p>
       </div>
       <h2 style="margin-top:20px">📋 答题规则</h2>
       <div class="prize-rules">
@@ -609,7 +701,19 @@
     <div class="card result-card">
       <div class="result-score" id="result-score">0</div>
       <div class="result-label">总得分</div>
-      <p style="color:#888;font-size:14px;margin-top:20px;">感谢您的参与！</p>
+      <div id="result-prize" class="result-prize"></div>
+      <p style="color:#888;font-size:14px;margin-top:10px;">感谢您的参与！</p>
+      <button class="btn btn-secondary" id="btn-show-wrong" onclick="toggleWrongAnswers()" style="margin-top:20px;display:none;">
+        📝 查看错题解析
+      </button>
+    </div>
+
+    <!-- 错题解析区 -->
+    <div id="wrong-answers-section" class="card" style="display:none;margin-top:16px;">
+      <div class="section-title" style="font-size:16px;font-weight:600;margin-bottom:12px;color:#333;">
+        ❌ 错题解析 <span id="wrong-count" style="font-size:13px;color:#999;font-weight:normal;"></span>
+      </div>
+      <div id="wrong-answers-list"></div>
     </div>
   </div>
 
@@ -1173,6 +1277,7 @@ function nextQuestion() {
 async function submitQuiz() {
   let score = 0;
   let correctCount = 0;
+  let wrongQuestions = [];
 
   quizState.questions.forEach((q, i) => {
     const userAns = quizState.answers[i] || [];
@@ -1182,6 +1287,16 @@ async function submitQuiz() {
     if (isCorrect) {
       score += q.score;
       correctCount++;
+    } else {
+      wrongQuestions.push({
+        index: i + 1,
+        question: q.question,
+        type: q.type,
+        options: q.options,
+        userAnswer: userAns,
+        correctAnswer: correctAns,
+        score: q.score
+      });
     }
   });
 
@@ -1191,11 +1306,12 @@ async function submitQuiz() {
   const timeStr = `${minutes}分${seconds}秒`;
 
   let prize = 'none';
-  let prizeText = '继续加油';
+  let prizeText = '谢谢参与';
   let prizeClass = 'prize-none';
-  if (score === 100) { prize = 'first'; prizeText = '🏆 一等奖'; prizeClass = 'prize-1'; }
-  else if (score >= 90) { prize = 'second'; prizeText = '🥈 二等奖'; prizeClass = 'prize-2'; }
-  else if (score >= 80) { prize = 'third'; prizeText = '🥉 三等奖'; prizeClass = 'prize-3'; }
+  if (score >= 91) { prize = 'first'; prizeText = '🏆 一等奖'; prizeClass = 'prize-1'; }
+  else if (score >= 81) { prize = 'second'; prizeText = '🥈 二等奖'; prizeClass = 'prize-2'; }
+  else if (score >= 71) { prize = 'third'; prizeText = '🥉 三等奖'; prizeClass = 'prize-3'; }
+  else if (score >= 60) { prize = 'participation'; prizeText = '🎖️ 参与奖'; prizeClass = 'prize-participation'; }
 
   // 提交到后端
   try {
@@ -1216,10 +1332,89 @@ async function submitQuiz() {
     console.error('提交记录失败:', err);
   }
 
-  // 显示结果（只显示总分）
+  // 显示结果（只显示总分 + 奖项徽章）
   document.getElementById('result-score').textContent = score;
+  const prizeEl = document.getElementById('result-prize');
+  prizeEl.textContent = prizeText;
+  prizeEl.className = 'result-prize ' + prizeClass;
+
+  // 显示错题按钮（有错才显示）
+  const wrongBtn = document.getElementById('btn-show-wrong');
+  if (wrongQuestions.length > 0) {
+    wrongBtn.style.display = 'inline-block';
+    document.getElementById('wrong-count').textContent = `（共 ${wrongQuestions.length} 道）`;
+    renderWrongAnswers(wrongQuestions);
+  } else {
+    wrongBtn.style.display = 'none';
+  }
+
+  // 重置错题区域隐藏状态
+  document.getElementById('wrong-answers-section').style.display = 'none';
 
   showPage('result');
+}
+
+function renderWrongAnswers(wrongList) {
+  const typeMap = { single: '单选题', multi: '多选题', judge: '判断题' };
+  const list = document.getElementById('wrong-answers-list');
+
+  list.innerHTML = wrongList.map(w => {
+    const userAnsSet = new Set(w.userAnswer);
+    const correctAnsSet = new Set(w.correctAnswer);
+
+    const optionsHtml = w.options.map((opt, i) => {
+      const letter = String.fromCharCode(65 + i);
+      const isUserAns = userAnsSet.has(i);
+      const isCorrect = correctAnsSet.has(i);
+      let cls = 'normal';
+      if (isUserAns && !isCorrect) cls = 'user-wrong';
+      else if (isCorrect) cls = 'correct-ans';
+
+      const mark = isCorrect ? '✓' : (isUserAns && !isCorrect ? '✗' : '');
+      return `<div class="wrong-opt ${cls}">
+        <span class="wrong-opt-letter">${letter}</span>
+        <span style="flex:1">${escapeHtml(opt)}</span>
+        <span style="font-weight:600">${mark}</span>
+      </div>`;
+    }).join('');
+
+    const userAnsText = w.userAnswer.length > 0
+      ? w.userAnswer.sort().map(i => String.fromCharCode(65 + i)).join('、')
+      : '未作答';
+    const correctAnsText = w.type === 'judge'
+      ? (w.correctAnswer[0] === 0 ? '正确' : '错误')
+      : w.correctAnswer.sort().map(i => String.fromCharCode(65 + i)).join('、');
+
+    return `
+      <div class="wrong-item">
+        <div class="wrong-q-head">
+          <span class="wrong-q-num">第 ${w.index} 题</span>
+          <span class="wrong-q-type">${typeMap[w.type]} · ${w.score}分</span>
+        </div>
+        <div class="wrong-q-text">${escapeHtml(w.question)}</div>
+        <div class="wrong-options">${optionsHtml}</div>
+        <div class="wrong-ans-row">
+          <span class="your">你的答案：${userAnsText}</span>
+          <span class="correct">正确答案：${correctAnsText}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+let wrongAnswersVisible = false;
+function toggleWrongAnswers() {
+  const section = document.getElementById('wrong-answers-section');
+  const btn = document.getElementById('btn-show-wrong');
+  wrongAnswersVisible = !wrongAnswersVisible;
+  if (wrongAnswersVisible) {
+    section.style.display = 'block';
+    btn.textContent = '收起错题解析';
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    section.style.display = 'none';
+    btn.textContent = '📝 查看错题解析';
+  }
 }
 
 function restartQuiz() {
