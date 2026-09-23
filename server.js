@@ -1,4 +1,10 @@
 require('dotenv').config();
+
+// 白名单表ID默认值（可通过环境变量 WHITELIST_TABLE_ID 覆盖）
+if (!process.env.WHITELIST_TABLE_ID) {
+  process.env.WHITELIST_TABLE_ID = 'tblPgabes3cQ8VN7';
+}
+
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
