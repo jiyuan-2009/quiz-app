@@ -483,6 +483,97 @@ app.post('/api/questions/import', async (req, res) => {
   }
 });
 
+// 批量更新题目分值
+// 新分值规则：单选9分、多选14分、判断9分
+app.post('/api/questions/batch-update-scores', async (req, res) => {
+  try {
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.QUIZ_TABLE_ID;
+
+    // 1. 获取所有题目
+    let allRecords = [];
+    let pageToken = null;
+    do {
+      const params = {
+        page_size: 100,
+        ...(pageToken && { page_token: pageToken })
+      };
+      const result = await feishuRequest(
+        'GET',
+        `/bitable/v1/apps/${baseToken}/tables/${tableId}/records`,
+        null,
+        params
+      );
+      if (result.data && result.data.items) {
+        allRecords = allRecords.concat(result.data.items);
+      }
+      pageToken = result.data && result.data.page_token && result.data.has_more ? result.data.page_token : null;
+    } while (pageToken && allRecords.length < 1000);
+
+    // 2. 定义新分值
+    const scoreMap = {
+      'single': 9,
+      'multi': 14,
+      'judge': 9
+    };
+
+    // 3. 找出需要更新的记录并批量更新
+    const toUpdate = [];
+    allRecords.forEach(item => {
+      const f = item.fields;
+      const typeField = f['题型'];
+      const type = Array.isArray(typeField) ? typeField[0] : typeField;
+      const currentScore = Number(f['分值']) || 0;
+      const newScore = scoreMap[type];
+      if (newScore && currentScore !== newScore) {
+        toUpdate.push({
+          record_id: item.record_id,
+          fields: { '分值': newScore },
+          type,
+          oldScore: currentScore,
+          newScore
+        });
+      }
+    });
+
+    // 批量更新（每次最多500条）
+    let updatedCount = 0;
+    const batchSize = 500;
+    for (let i = 0; i < toUpdate.length; i += batchSize) {
+      const batch = toUpdate.slice(i, i + batchSize).map(u => ({
+        record_id: u.record_id,
+        fields: u.fields
+      }));
+      await feishuRequest(
+        'POST',
+        `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/batch_update`,
+        { records: batch }
+      );
+      updatedCount += batch.length;
+    }
+
+    // 统计各题型更新数量
+    const typeStats = {};
+    toUpdate.forEach(u => {
+      const key = `${u.type}: ${u.oldScore}→${u.newScore}`;
+      typeStats[key] = (typeStats[key] || 0) + 1;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        total: allRecords.length,
+        updated: updatedCount,
+        unchanged: allRecords.length - updatedCount,
+        typeStats
+      }
+    });
+  } catch (err) {
+    console.error('批量更新分值失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ========== 答题记录接口 ==========
 // 检查手机号是否已答过题
 // 检查是否已答过题（支持手机号 或 姓名+团队 校验）
