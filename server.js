@@ -516,6 +516,9 @@ app.get('/api/records/check/:phone', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+// 内存级防重锁（应对并发竞态）
+const submittingPhones = new Set();
+
 // 提交答题结果
 app.post('/api/records', async (req, res) => {
   try {
@@ -524,6 +527,14 @@ app.post('/api/records', async (req, res) => {
     if (!name || !team || !phone) {
       return res.status(400).json({ success: false, error: '请填写完整信息' });
     }
+
+    // 内存级防重：同一手机号正在提交中直接拒绝
+    if (submittingPhones.has(phone)) {
+      return res.status(400).json({ success: false, error: '提交中，请稍候...' });
+    }
+    submittingPhones.add(phone);
+
+    try {
     // 检查是否已答过题（每人只能答一次）
     const baseToken = process.env.FEISHU_BASE_TOKEN;
     const tableId = process.env.RECORD_TABLE_ID;
@@ -574,6 +585,9 @@ app.post('/api/records', async (req, res) => {
     );
 
     res.json({ success: true, data: { record_id: result.data.record && result.data.record.record_id } });
+    } finally {
+      submittingPhones.delete(phone);
+    }
   } catch (err) {
     console.error('提交记录失败:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -610,7 +624,7 @@ app.get('/api/records', async (req, res) => {
     } while (pageToken && allRecords.length < 500);
 
     // 转换并按分数排序
-    const records = allRecords.map(item => {
+    let records = allRecords.map(item => {
       const f = item.fields;
       const prizeField = f['获奖等级'];
       return {
@@ -625,6 +639,17 @@ app.get('/api/records', async (req, res) => {
         createdAt: f['答题时间'] || item.created_time
       };
     }).sort((a, b) => b.score - a.score);
+
+    // 按手机号去重：同一人只保留最高分的一条记录
+    const seen = new Map();
+    records.forEach(r => {
+      const phone = r.phone;
+      if (!phone) return;
+      if (!seen.has(phone) || r.score > seen.get(phone).score) {
+        seen.set(phone, r);
+      }
+    });
+    records = Array.from(seen.values()).sort((a, b) => b.score - a.score);
 
     // 统计
     const total = records.length;

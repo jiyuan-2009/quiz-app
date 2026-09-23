@@ -1464,7 +1464,11 @@ function nextQuestion() {
   }
 }
 
+let isSubmitting = false;
 async function submitQuiz() {
+  if (isSubmitting) return;
+  isSubmitting = true;
+
   let score = 0;
   let correctCount = 0;
   let wrongQuestions = [];
@@ -1505,7 +1509,7 @@ async function submitQuiz() {
 
   // 提交到后端
   try {
-    await fetch(`${API_BASE}/records`, {
+    const res = await fetch(`${API_BASE}/records`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1518,6 +1522,10 @@ async function submitQuiz() {
         timeUsed: timeStr
       })
     });
+    const data = await res.json();
+    if (!data.success && data.error) {
+      alert(data.error);
+    }
   } catch (err) {
     console.error('提交记录失败:', err);
   }
@@ -1542,6 +1550,7 @@ async function submitQuiz() {
   document.getElementById('wrong-answers-section').style.display = 'none';
 
   showPage('result');
+  isSubmitting = false;
 }
 
 function renderWrongAnswers(wrongList) {
