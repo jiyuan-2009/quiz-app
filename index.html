@@ -1285,7 +1285,7 @@ async function submitQuiz() {
     const isCorrect = userAns.length === correctAns.length &&
       userAns.every(a => correctAns.includes(a));
     if (isCorrect) {
-      score += q.score;
+      score += Number(q.score) || 0;
       correctCount++;
     } else {
       wrongQuestions.push({
