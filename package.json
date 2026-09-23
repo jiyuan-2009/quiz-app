@@ -1,7 +1,7 @@
 {
   "name": "quiz-app",
   "version": "2.0.0",
-  "description": "二维码答题小程序（飞书多维表格后端版）",
+  "description": "\u4e8c\u7ef4\u7801\u7b54\u9898\u5c0f\u7a0b\u5e8f\uff08\u98de\u4e66\u591a\u7ef4\u8868\u683c\u540e\u7aef\u7248\uff09",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,7 +11,8 @@
     "express": "^4.18.2",
     "axios": "^1.6.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "xlsx": "^0.18.5"
   },
   "engines": {
     "node": ">=16.0.0"
