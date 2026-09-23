@@ -582,7 +582,7 @@ app.post('/api/questions/batch-update-scores', async (req, res) => {
 
 // ========== 白名单接口 ==========
 
-// 检查是否在白名单内（按姓名+部门匹配）
+// 检查是否在白名单内（优先手机号，其次姓名匹配）
 app.get('/api/whitelist/check', async (req, res) => {
   try {
     const { name, team, phone } = req.query;
@@ -594,46 +594,50 @@ app.get('/api/whitelist/check', async (req, res) => {
       return res.json({ success: true, allowed: true, inWhitelist: false });
     }
 
-    let conditions = [];
+    let exists = false;
 
     // 优先用手机号匹配
     if (phone) {
-      conditions.push({
-        field_name: '手机号',
-        operator: 'is',
-        value: [phone]
-      });
-    }
-    // 没有手机号则用姓名+部门匹配
-    else if (name && team) {
-      conditions.push(
-        { field_name: '姓名', operator: 'is', value: [name] },
-        { field_name: '部门', operator: 'is', value: [team] }
+      const phoneResult = await feishuRequest(
+        'POST',
+        `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
+        {
+          filter: {
+            conjunction: 'and',
+            conditions: [
+              { field_name: '手机号', operator: 'is', value: [phone] },
+              { field_name: '状态', operator: 'is', value: ['启用'] }
+            ]
+          },
+          page_size: 1
+        }
       );
-    } else {
-      return res.status(400).json({ success: false, error: '请提供手机号或姓名+部门' });
+      exists = phoneResult.data && phoneResult.data.items && phoneResult.data.items.length > 0;
     }
 
-    // 只查启用状态的
-    conditions.push({
-      field_name: '状态',
-      operator: 'is',
-      value: ['启用']
-    });
+    // 手机号没匹配到或没提供，用姓名匹配（不校验部门）
+    if (!exists && name) {
+      const nameResult = await feishuRequest(
+        'POST',
+        `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
+        {
+          filter: {
+            conjunction: 'and',
+            conditions: [
+              { field_name: '姓名', operator: 'is', value: [name] },
+              { field_name: '状态', operator: 'is', value: ['启用'] }
+            ]
+          },
+          page_size: 1
+        }
+      );
+      exists = nameResult.data && nameResult.data.items && nameResult.data.items.length > 0;
+    }
 
-    const result = await feishuRequest(
-      'POST',
-      `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
-      {
-        filter: {
-          conjunction: 'and',
-          conditions
-        },
-        page_size: 1
-      }
-    );
+    if (!phone && !name) {
+      return res.status(400).json({ success: false, error: '请提供手机号或姓名' });
+    }
 
-    const exists = result.data && result.data.items && result.data.items.length > 0;
     res.json({ success: true, allowed: exists, inWhitelist: exists });
   } catch (err) {
     console.error('白名单检查失败:', err);
@@ -976,9 +980,9 @@ app.post('/api/records', async (req, res) => {
 
       let inWhitelist = whitelistCheck.data && whitelistCheck.data.items && whitelistCheck.data.items.length > 0;
 
-      // 手机号没匹配到，再用姓名+部门匹配
+      // 手机号没匹配到，再用姓名匹配（不校验部门）
       if (!inWhitelist) {
-        const nameTeamCheck = await feishuRequest(
+        const nameCheck = await feishuRequest(
           'POST',
           `/bitable/v1/apps/${baseToken}/tables/${whitelistTableId}/records/search`,
           {
@@ -986,14 +990,13 @@ app.post('/api/records', async (req, res) => {
               conjunction: 'and',
               conditions: [
                 { field_name: '姓名', operator: 'is', value: [name] },
-                { field_name: '部门', operator: 'is', value: [team] },
                 { field_name: '状态', operator: 'is', value: ['启用'] }
               ]
             },
             page_size: 1
           }
         );
-        inWhitelist = nameTeamCheck.data && nameTeamCheck.data.items && nameTeamCheck.data.items.length > 0;
+        inWhitelist = nameCheck.data && nameCheck.data.items && nameCheck.data.items.length > 0;
       }
 
       if (!inWhitelist) {
