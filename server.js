@@ -743,7 +743,12 @@ app.post('/api/whitelist', async (req, res) => {
 
     const duplicates = duplicateCheck.data && duplicateCheck.data.items ? duplicateCheck.data.items : [];
     if (duplicates.length > 0) {
-      const dupInfo = duplicates.map(d => `${d.fields['姓名']}（${d.fields['部门'] || '未填部门'}）`).join('、');
+      const dupInfo = duplicates.map(d => {
+        const f = d.fields || {};
+        const n = Array.isArray(f['姓名']) ? (f['姓名'][0] && f['姓名'][0].text) || f['姓名'][0] : f['姓名'];
+        const t = Array.isArray(f['部门']) ? (f['部门'][0] && f['部门'][0].text) || f['部门'][0] : f['部门'];
+        return `${n}（${t || '未填部门'}）`;
+      }).join('、');
       return res.status(400).json({
         success: false,
         error: `白名单中已存在同名人员：${dupInfo}`,
