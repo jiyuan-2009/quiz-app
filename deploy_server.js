@@ -114,12 +114,22 @@ app.get('/api/questions', async (req, res) => {
 
         // 解析正确答案
         let answer = [];
-        const answerText = f['正确答案'] || '';
+        let answerText = f['正确答案'] || '';
+        // 处理数组格式（Bitable单选字段可能返回数组）
+        if (Array.isArray(answerText)) {
+          answerText = answerText[0] || '';
+        }
         if (answerText) {
-          answer = answerText.split(',').map(a => {
-            const letter = a.trim().toUpperCase();
-            return letter.charCodeAt(0) - 65; // A->0, B->1...
-          }).filter(n => n >= 0 && n <= 3);
+          let letters = [];
+          // 兼容两种格式：逗号分隔(A,B,C) 和 连写(ABC)
+          if (answerText.includes(',') || answerText.includes('，') || answerText.includes('、')) {
+            letters = answerText.split(/[,，、]/).map(a => a.trim().toUpperCase()).filter(Boolean);
+          } else {
+            // 连写格式，每个字符都是一个答案字母
+            letters = answerText.toUpperCase().split('').filter(c => c >= 'A' && c <= 'D');
+          }
+          answer = letters.map(letter => letter.charCodeAt(0) - 65)
+            .filter(n => n >= 0 && n <= 3);
         }
 
         // 收集选项（过滤空选项）
