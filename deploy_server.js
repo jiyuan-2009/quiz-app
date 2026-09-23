@@ -485,11 +485,32 @@ app.post('/api/questions/import', async (req, res) => {
 
 // ========== 答题记录接口 ==========
 // 检查手机号是否已答过题
-app.get('/api/records/check/:phone', async (req, res) => {
+// 检查是否已答过题（支持手机号 或 姓名+团队 校验）
+app.get('/api/records/check', async (req, res) => {
   try {
-    const { phone } = req.params;
+    const { phone, name, team } = req.query;
     const baseToken = process.env.FEISHU_BASE_TOKEN;
     const tableId = process.env.RECORD_TABLE_ID;
+
+    let conditions = [];
+
+    // 优先用手机号检查
+    if (phone) {
+      conditions.push({
+        field_name: '电话号码',
+        operator: 'is',
+        value: [phone]
+      });
+    }
+    // 如果同时传了姓名和团队，也检查姓名+团队组合
+    else if (name && team) {
+      conditions.push(
+        { field_name: '姓名', operator: 'is', value: [name] },
+        { field_name: '团队', operator: 'is', value: [team] }
+      );
+    } else {
+      return res.status(400).json({ success: false, error: '请提供手机号或姓名+团队' });
+    }
 
     const result = await feishuRequest(
       'POST',
@@ -497,13 +518,7 @@ app.get('/api/records/check/:phone', async (req, res) => {
       {
         filter: {
           conjunction: 'and',
-          conditions: [
-            {
-              field_name: '电话号码',
-              operator: 'is',
-              value: [phone]
-            }
-          ]
+          conditions
         },
         page_size: 1
       }
@@ -512,7 +527,7 @@ app.get('/api/records/check/:phone', async (req, res) => {
     const exists = result.data && result.data.items && result.data.items.length > 0;
     res.json({ success: true, exists });
   } catch (err) {
-    console.error('检查手机号失败:', err);
+    console.error('检查失败:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -535,11 +550,12 @@ app.post('/api/records', async (req, res) => {
     submittingPhones.add(phone);
 
     try {
-    // 检查是否已答过题（每人只能答一次）
+    // 检查是否已答过题（每人只能答一次）—— 双重校验：手机号 或 姓名+团队
     const baseToken = process.env.FEISHU_BASE_TOKEN;
     const tableId = process.env.RECORD_TABLE_ID;
 
-    const checkResult = await feishuRequest(
+    // 检查1：手机号是否已存在
+    const phoneCheck = await feishuRequest(
       'POST',
       `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
       {
@@ -557,7 +573,35 @@ app.post('/api/records', async (req, res) => {
       }
     );
 
-    if (checkResult.data && checkResult.data.items && checkResult.data.items.length > 0) {
+    if (phoneCheck.data && phoneCheck.data.items && phoneCheck.data.items.length > 0) {
+      return res.status(400).json({ success: false, error: '您已经参与过答题，每人仅限一次' });
+    }
+
+    // 检查2：姓名+团队组合是否已存在（防止换手机号重复答题）
+    const nameTeamCheck = await feishuRequest(
+      'POST',
+      `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
+      {
+        filter: {
+          conjunction: 'and',
+          conditions: [
+            {
+              field_name: '姓名',
+              operator: 'is',
+              value: [name]
+            },
+            {
+              field_name: '团队',
+              operator: 'is',
+              value: [team]
+            }
+          ]
+        },
+        page_size: 1
+      }
+    );
+
+    if (nameTeamCheck.data && nameTeamCheck.data.items && nameTeamCheck.data.items.length > 0) {
       return res.status(400).json({ success: false, error: '您已经参与过答题，每人仅限一次' });
     }
     const prizeMap = {
@@ -640,13 +684,13 @@ app.get('/api/records', async (req, res) => {
       };
     }).sort((a, b) => b.score - a.score);
 
-    // 按手机号去重：同一人只保留最高分的一条记录
+    // 按姓名+团队去重：同一人只保留最高分的一条记录（防止换手机号重复答题）
     const seen = new Map();
     records.forEach(r => {
-      const phone = r.phone;
-      if (!phone) return;
-      if (!seen.has(phone) || r.score > seen.get(phone).score) {
-        seen.set(phone, r);
+      const key = `${r.name}__${r.team}`;
+      if (!key || key === '__') return;
+      if (!seen.has(key) || r.score > seen.get(key).score) {
+        seen.set(key, r);
       }
     });
     records = Array.from(seen.values()).sort((a, b) => b.score - a.score);

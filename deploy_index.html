@@ -1279,11 +1279,21 @@ async function startQuiz() {
   try {
        btn.textContent = '验证中...';
 
-    // 检查是否已答过题
-    const checkRes = await fetch(`${API_BASE}/records/check/${phone}`);
-    const checkData = await checkRes.json();
-    if (checkData.success && checkData.exists) {
+    // 检查是否已答过题（先查手机号）
+    const phoneCheckRes = await fetch(`${API_BASE}/records/check?phone=${encodeURIComponent(phone)}`);
+    const phoneCheckData = await phoneCheckRes.json();
+    if (phoneCheckData.success && phoneCheckData.exists) {
       toast('该手机号已参与过答题，每人仅限一次');
+      btn.disabled = false;
+      btn.textContent = '开始答题';
+      return;
+    }
+
+    // 再检查姓名+团队组合（防止换手机号重复答题）
+    const nameCheckRes = await fetch(`${API_BASE}/records/check?name=${encodeURIComponent(name)}&team=${encodeURIComponent(team)}`);
+    const nameCheckData = await nameCheckRes.json();
+    if (nameCheckData.success && nameCheckData.exists) {
+      toast('您已经参与过答题，每人仅限一次');
       btn.disabled = false;
       btn.textContent = '开始答题';
       return;
