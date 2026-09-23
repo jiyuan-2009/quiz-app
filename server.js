@@ -725,6 +725,33 @@ app.post('/api/whitelist', async (req, res) => {
       return res.status(400).json({ success: false, error: '姓名和部门必填' });
     }
 
+    // 重名校验：检查是否已存在同名人员
+    const duplicateCheck = await feishuRequest(
+      'POST',
+      `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/search`,
+      {
+        filter: {
+          conjunction: 'and',
+          conditions: [
+            { field_name: '姓名', operator: 'is', value: [name] },
+            { field_name: '状态', operator: 'is', value: ['启用'] }
+          ]
+        },
+        page_size: 10
+      }
+    );
+
+    const duplicates = duplicateCheck.data && duplicateCheck.data.items ? duplicateCheck.data.items : [];
+    if (duplicates.length > 0) {
+      const dupInfo = duplicates.map(d => `${d.fields['姓名']}（${d.fields['部门'] || '未填部门'}）`).join('、');
+      return res.status(400).json({
+        success: false,
+        error: `白名单中已存在同名人员：${dupInfo}`,
+        duplicate: true,
+        duplicateCount: duplicates.length
+      });
+    }
+
     const fields = {
       '姓名': name,
       '部门': team,
@@ -742,6 +769,95 @@ app.post('/api/whitelist', async (req, res) => {
     res.json({ success: true, data: { record_id: result.data.record && result.data.record.record_id } });
   } catch (err) {
     console.error('添加白名单失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 批量更新白名单人员
+app.put('/api/whitelist/batch-update', async (req, res) => {
+  try {
+    const { ids, fields } = req.body;
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.WHITELIST_TABLE_ID;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: '请选择要更新的人员' });
+    }
+    if (!fields || Object.keys(fields).length === 0) {
+      return res.status(400).json({ success: false, error: '请提供要更新的字段' });
+    }
+
+    // 只允许更新的字段
+    const allowedFields = ['部门', '手机号', '工号', '状态'];
+    const updateFields = {};
+    for (const key of Object.keys(fields)) {
+      if (allowedFields.includes(key)) {
+        updateFields[key] = fields[key];
+      }
+    }
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ success: false, error: '没有可更新的字段' });
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+    const errors = [];
+
+    // 逐条更新（Bitable API 单条更新）
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await feishuRequest(
+          'PUT',
+          `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/${ids[i]}`,
+          { fields: updateFields }
+        );
+        successCount++;
+      } catch (e) {
+        failCount++;
+        errors.push({ id: ids[i], message: e.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { successCount, failCount, total: ids.length, errors: errors.slice(0, 10) }
+    });
+  } catch (err) {
+    console.error('批量更新白名单失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 批量删除白名单人员
+app.delete('/api/whitelist/batch-delete', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.WHITELIST_TABLE_ID;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: '请选择要删除的人员' });
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await feishuRequest(
+          'DELETE',
+          `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/${ids[i]}`
+        );
+        successCount++;
+      } catch (e) {
+        failCount++;
+      }
+    }
+
+    res.json({ success: true, data: { successCount, failCount, total: ids.length } });
+  } catch (err) {
+    console.error('批量删除白名单失败:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
