@@ -301,14 +301,38 @@
     gap: 8px;
   }
   .wrong-opt.user-wrong {
-    background: #fff0f0;
+    background: #fff1f0;
+    color: #cf1322;
+    border: 2px solid #ff4d4f;
+    font-weight: 500;
+    position: relative;
+  }
+  .wrong-opt.user-wrong::before {
+    content: '✗';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
     color: #ff4d4f;
-    border: 1px solid #ffccc7;
+    font-weight: 900;
+    font-size: 18px;
   }
   .wrong-opt.correct-ans {
-    background: #f0fff4;
+    background: linear-gradient(135deg, #f6ffed, #d9f7be);
+    color: #389e0d;
+    border: 2px solid #52c41a;
+    font-weight: 500;
+    position: relative;
+  }
+  .wrong-opt.correct-ans::before {
+    content: '✓';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
     color: #52c41a;
-    border: 1px solid #b7eb8f;
+    font-weight: 900;
+    font-size: 18px;
   }
   .wrong-opt.normal {
     background: #fafafa;
@@ -320,14 +344,28 @@
     flex-shrink: 0;
   }
   .wrong-ans-row {
-    font-size: 12px;
-    color: #999;
-    margin-top: 6px;
+    font-size: 13px;
+    margin-top: 10px;
     display: flex;
     gap: 16px;
+    padding-top: 8px;
+    border-top: 1px dashed #ffd6d6;
   }
-  .wrong-ans-row .correct { color: #52c41a; }
-  .wrong-ans-row .your { color: #ff4d4f; }
+  .wrong-ans-row .correct { 
+    color: #389e0d; 
+    font-weight: 600; 
+    background: #f6ffed;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #b7eb8f;
+  }
+  .wrong-ans-row .your { 
+    color: #cf1322; 
+    background: #fff1f0;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #ffccc7;
+  }
   .result-info {
     background: #fafbfc;
     border-radius: 12px;
@@ -1370,11 +1408,9 @@ function renderWrongAnswers(wrongList) {
       if (isUserAns && !isCorrect) cls = 'user-wrong';
       else if (isCorrect) cls = 'correct-ans';
 
-      const mark = isCorrect ? '✓' : (isUserAns && !isCorrect ? '✗' : '');
       return `<div class="wrong-opt ${cls}">
         <span class="wrong-opt-letter">${letter}</span>
-        <span style="flex:1">${escapeHtml(opt)}</span>
-        <span style="font-weight:600">${mark}</span>
+        <span style="flex:1;padding-right:30px;">${escapeHtml(opt)}</span>
       </div>`;
     }).join('');
 
