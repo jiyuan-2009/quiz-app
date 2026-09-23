@@ -65,6 +65,7 @@
   .btn-secondary { background: #f0f2f5; color: #555; }
   .btn-danger { background: #fff0f0; color: #e74c3c; }
   .btn-group { display: flex; gap: 10px; }
+  .quiz-nav-buttons { display: flex; gap: 10px; margin-top: 16px; }
   .btn-group .btn { flex: 1; }
 
   .form-group { margin-bottom: 16px; }
@@ -729,9 +730,15 @@
     <div class="question-card">
       <span class="q-number" id="q-type-label">单选题</span>
       <div class="q-content" id="q-content"></div>
+      <div id="multi-hint" style="display:none;background:#fff7e6;border:1px solid #ffd591;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:#d46b08;">
+        💡 本题为多选题，请选择所有正确答案
+      </div>
       <div class="options" id="q-options"></div>
     </div>
-    <button class="btn btn-primary" id="next-btn" onclick="nextQuestion()" disabled style="opacity:0.5">下一题</button>
+    <div class="quiz-nav-buttons">
+      <button class="btn btn-secondary" id="prev-btn" onclick="prevQuestion()" style="flex:1;display:none;">上一题</button>
+      <button class="btn btn-primary" id="next-btn" onclick="nextQuestion()" disabled style="opacity:0.5;flex:2;">下一题</button>
+    </div>
   </div>
 
   <!-- 结果页 -->
@@ -1257,10 +1264,19 @@ function renderQuestion() {
   const total = quizState.questions.length;
 
   const typeMap = { single: '单选题', multi: '多选题', judge: '判断题' };
+  const typeHint = { single: '', multi: ' · 可多选', judge: '' };
   document.getElementById('quiz-subtitle').textContent = `第 ${idx + 1} / ${total} 题`;
-  document.getElementById('q-type-label').textContent = `${typeMap[q.type]} · ${q.score}分`;
+  document.getElementById('q-type-label').textContent = `${typeMap[q.type]}${typeHint[q.type]} · ${q.score}分`;
   document.getElementById('q-content').textContent = q.question;
   document.getElementById('progress-fill').style.width = ((idx) / total * 100) + '%';
+
+  // 多选题提示条
+  const multiHint = document.getElementById('multi-hint');
+  if (q.type === 'multi') {
+    multiHint.style.display = 'block';
+  } else {
+    multiHint.style.display = 'none';
+  }
 
   const optionsDiv = document.getElementById('q-options');
   const currentAnswer = quizState.answers[idx];
@@ -1276,10 +1292,18 @@ function renderQuestion() {
   }).join('');
 
   const btn = document.getElementById('next-btn');
+  const prevBtn = document.getElementById('prev-btn');
   const hasAnswer = currentAnswer && currentAnswer.length > 0;
   btn.disabled = !hasAnswer;
   btn.style.opacity = hasAnswer ? '1' : '0.5';
   btn.textContent = idx === total - 1 ? '提交答卷' : '下一题';
+
+  // 上一题按钮：第一题隐藏，其他题显示
+  if (idx > 0) {
+    prevBtn.style.display = 'block';
+  } else {
+    prevBtn.style.display = 'none';
+  }
 }
 
 function selectOption(idx) {
@@ -1298,6 +1322,13 @@ function selectOption(idx) {
 
   quizState.answers[quizState.currentIndex] = current;
   renderQuestion();
+}
+
+function prevQuestion() {
+  if (quizState.currentIndex > 0) {
+    quizState.currentIndex--;
+    renderQuestion();
+  }
 }
 
 function nextQuestion() {
