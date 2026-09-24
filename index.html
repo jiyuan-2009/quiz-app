@@ -1218,6 +1218,9 @@
       <h1>📊 答题排行</h1>
       <p id="record-count">共 0 人次参与</p>
     </div>
+    <div style="text-align:right;margin-bottom:12px">
+      <button class="btn btn-danger" onclick="clearAllRecords()" style="font-size:13px;padding:8px 14px">🗑️ 重置答题记录</button>
+    </div>
     <div class="stats-grid">
       <div class="stat-item">
         <div class="stat-num" id="stat-total">0</div>
@@ -2114,6 +2117,28 @@ async function loadRecords() {
     }
   } catch (err) {
     list.innerHTML = `<div class="empty"><div class="empty-icon">❌</div><div class="empty-text">加载失败：${err.message}</div></div>`;
+  }
+}
+
+async function clearAllRecords() {
+  if (!confirm('确定要清空所有答题记录吗？此操作不可恢复，清空后所有人可以重新答题。')) return;
+  const pwd = prompt('请输入管理员密码确认：');
+  if (!pwd) return;
+  try {
+    const res = await fetch(`${API_BASE}/records`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast(data.message || '已清空');
+      loadRecords();
+    } else {
+      toast(data.error || '操作失败');
+    }
+  } catch (err) {
+    toast('操作失败：' + err.message);
   }
 }
 
