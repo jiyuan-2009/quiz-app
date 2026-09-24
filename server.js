@@ -1333,6 +1333,56 @@ app.get('/api/records', async (req, res) => {
   }
 });
 
+// 清空答题记录（需管理员密码）
+app.delete('/api/records', async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ success: false, error: '密码错误' });
+    }
+
+    const baseToken = process.env.FEISHU_BASE_TOKEN;
+    const tableId = process.env.RECORD_TABLE_ID;
+
+    // 分批拉取所有记录ID
+    let allIds = [];
+    let pageToken = null;
+    do {
+      const params = {
+        page_size: 500,
+        ...(pageToken && { page_token: pageToken })
+      };
+      const result = await feishuRequest(
+        'GET',
+        `/bitable/v1/apps/${baseToken}/tables/${tableId}/records`,
+        null,
+        params
+      );
+      if (result.data && result.data.items) {
+        result.data.items.forEach(item => allIds.push(item.record_id));
+      }
+      pageToken = result.data && result.data.page_token && result.data.has_more ? result.data.page_token : null;
+    } while (pageToken);
+
+    // 批量删除（每次最多 500 条）
+    let deleted = 0;
+    for (let i = 0; i < allIds.length; i += 500) {
+      const batch = allIds.slice(i, i + 500);
+      await feishuRequest(
+        'POST',
+        `/bitable/v1/apps/${baseToken}/tables/${tableId}/records/batch_delete`,
+        { records: batch }
+      );
+      deleted += batch.length;
+    }
+
+    res.json({ success: true, deletedCount: deleted, message: `已清空 ${deleted} 条答题记录` });
+  } catch (err) {
+    console.error('清空记录失败:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ========== 健康检查 ==========
 app.get('/api/health', (req, res) => {
   res.json({ success: true, status: 'ok', time: new Date().toISOString() });
