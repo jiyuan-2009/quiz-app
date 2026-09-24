@@ -1225,7 +1225,40 @@ app.get('/api/records', async (req, res) => {
   try {
     const baseToken = process.env.FEISHU_BASE_TOKEN;
     const tableId = process.env.RECORD_TABLE_ID;
+    const whitelistTableId = process.env.WHITELIST_TABLE_ID;
     const limit = parseInt(req.query.limit) || 100;
+    const filter = req.query.filter || 'all'; // all / whitelist / nonWhitelist
+
+    // 如果需要按白名单过滤，先拉取白名单姓名集合
+    let whitelistNames = new Set();
+    if (filter === 'whitelist' || filter === 'nonWhitelist') {
+      let wlPageToken = null;
+      do {
+        const wlParams = {
+          page_size: 500,
+          ...(wlPageToken && { page_token: wlPageToken })
+        };
+        const wlResult = await feishuRequest(
+          'GET',
+          `/bitable/v1/apps/${baseToken}/tables/${whitelistTableId}/records`,
+          null,
+          wlParams
+        );
+        if (wlResult.data && wlResult.data.items) {
+          wlResult.data.items.forEach(item => {
+            const f = item.fields;
+            const statusField = f['状态'];
+            const status = Array.isArray(statusField) ? statusField[0] : statusField;
+            if (status !== '禁用') {
+              const nameField = f['姓名'];
+              const name = Array.isArray(nameField) ? (nameField[0] && nameField[0].text) || nameField[0] : nameField;
+              if (name) whitelistNames.add(String(name));
+            }
+          });
+        }
+        wlPageToken = wlResult.data && wlResult.data.page_token && wlResult.data.has_more ? wlResult.data.page_token : null;
+      } while (wlPageToken);
+    }
 
     let allRecords = [];
     let pageToken = null;
@@ -1276,6 +1309,13 @@ app.get('/api/records', async (req, res) => {
       }
     });
     records = Array.from(seen.values()).sort((a, b) => b.score - a.score);
+
+    // 按白名单过滤
+    if (filter === 'whitelist') {
+      records = records.filter(r => whitelistNames.has(r.name));
+    } else if (filter === 'nonWhitelist') {
+      records = records.filter(r => !whitelistNames.has(r.name));
+    }
 
     // 统计
     const total = records.length;
