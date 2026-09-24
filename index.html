@@ -1298,6 +1298,11 @@ function pickRandom(arr, count) {
 
 // ========== 页面切换 ==========
 function showPage(pageId) {
+  // 切换页面时关闭所有模态框
+  ['whitelist-modal', 'batch-edit-modal', 'edit-whitelist-modal', 'question-modal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('show');
+  });
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + pageId).classList.add('active');
   window.scrollTo(0, 0);
